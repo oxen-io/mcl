@@ -11,6 +11,7 @@
 #include <mcl/fp_tower.hpp>
 #include <mcl/ec.hpp>
 #include <mcl/curve_type.h>
+using HashFunction = std::function<std::array<unsigned char,32>(const std::string&)>;
 namespace mcl { namespace local {
 
 // to export fast cofactor multiplication to mapto_wb19
@@ -537,6 +538,7 @@ struct MapTo {
 			initBLS12(z, curveType);
 		}
 	}
+    //TODO sean step 3 wrap before going to "tryAndIncMapTo"
 	template<class G, class F>
 	bool mapToEc(G& P, const F& t) const
 	{
@@ -581,6 +583,7 @@ struct MapTo {
 		mulByCofactor(P);
 		return true;
 	}
+    //TODO sean step 2 this is where it starts
 	bool calc(G2& P, const Fp2& t) const
 	{
 		if (mapToMode_ == MCL_MAP_TO_MODE_HASH_TO_CURVE_07) {
@@ -600,6 +603,16 @@ struct MapTo {
 		if (mapToMode_ == MCL_MAP_TO_MODE_ETH2_LEGACY) {
 			P *= g2cofactorAdj_;
 		}
+		return true;
+	}
+	bool calcHash(G2& P, const std::string& message, HashFunction hashFunc) const
+	{
+        //auto hash = hashFunc(message);
+        //Fp t;
+        //t.setArrayMask(hash.data(), hash.size());
+        //ec::tryAndIncMapTo<G2>(P, Fp2(t,0));
+        ec::tryAndIncMapToHash<G2, Fp>(P, message, hashFunc);
+		mulByCofactor(P);
 		return true;
 	}
 };
@@ -2030,7 +2043,9 @@ inline int getMapToMode()
 	return BN::param.mapTo.mapToMode_;
 }
 inline void mapToG1(bool *pb, G1& P, const Fp& x) { *pb = BN::param.mapTo.calc(P, x); }
+//TODO sean step1 -> mapToG2
 inline void mapToG2(bool *pb, G2& P, const Fp2& x) { *pb = BN::param.mapTo.calc(P, x); }
+inline void mapToG2Hash(bool *pb, G2& P, const std::string& message, HashFunction hashFunc) { *pb = BN::param.mapTo.calcHash(P, message, hashFunc); }
 #ifndef CYBOZU_DONT_USE_EXCEPTION
 inline void mapToG1(G1& P, const Fp& x)
 {
