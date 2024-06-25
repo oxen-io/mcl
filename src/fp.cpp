@@ -8,6 +8,7 @@
 #include <cybozu/endian.hpp>
 #include <mcl/conversion.hpp>
 #include <mcl/invmod.hpp>
+#include <cstring>
 
 #if defined(MCL_STATIC_CODE) || defined(MCL_USE_XBYAK) || (defined(MCL_USE_LLVM) && (CYBOZU_HOST == CYBOZU_HOST_INTEL)) || (MCL_BINT_ASM_X64 == 1)
 
@@ -155,7 +156,7 @@ uint32_t sha512(void *out, uint32_t maxOutSize, const void *msg, uint32_t msgSiz
 void expand_message_xmd(uint8_t out[], size_t outSize, const void *msg, size_t msgSize, const void *dst, size_t dstSize)
 {
 	const size_t mdSize = 32;
-	assert((outSize % mdSize) == 0 && 0 < outSize && outSize <= 256);
+    assert((outSize % mdSize) == 0 && 0 < outSize && outSize <= 256);
 	const size_t r_in_bytes = 64;
 	const size_t n = outSize / mdSize;
 	static const uint8_t Z_pad[r_in_bytes] = {};
@@ -202,6 +203,64 @@ void expand_message_xmd(uint8_t out[], size_t outSize, const void *msg, size_t m
 	}
 }
 
+using HashFunction = std::function<std::array<unsigned char,32>(const std::string&)>;
+void expand_message_xmd_hash(uint8_t out[], size_t outSize, const void *msg, size_t msgSize, const void *dst, size_t dstSize, HashFunction hashFunc)
+{
+    const size_t mdSize = 32;
+    assert((outSize % mdSize) == 0 && 0 < outSize && outSize <= 256);
+    const size_t r_in_bytes = 136;
+    const size_t n = outSize / mdSize;
+    static const uint8_t Z_pad[r_in_bytes] = {};
+    uint8_t largeDst[mdSize];
+
+    if (dstSize > 255) {
+        std::string oversize_dst = "H2C-OVERSIZE-DST-";
+        oversize_dst.append(reinterpret_cast<const char*>(dst), dstSize);
+        auto result = hashFunc(oversize_dst);
+        std::memcpy(largeDst, result.data(), mdSize);
+        dst = largeDst;
+        dstSize = mdSize;
+    }
+
+    uint8_t lenBuf[2];
+    uint8_t iBuf = 0;
+    uint8_t dstSizeBuf = uint8_t(dstSize);
+    cybozu::Set16bitAsBE(lenBuf, uint16_t(outSize));
+
+    std::string b0_input;
+    b0_input.append(reinterpret_cast<const char*>(Z_pad), r_in_bytes);
+    b0_input.append(reinterpret_cast<const char*>(msg), msgSize);
+    b0_input.append(reinterpret_cast<const char*>(lenBuf), sizeof(lenBuf));
+    b0_input.push_back(iBuf);
+    b0_input.append(reinterpret_cast<const char*>(dst), dstSize);
+    b0_input.push_back(dstSizeBuf);
+
+    auto md = hashFunc(b0_input);
+    std::string bi_input;
+    bi_input.append(md.begin(), md.end());
+    bi_input.push_back(1);
+    bi_input.append(reinterpret_cast<const char*>(dst), dstSize);
+    bi_input.push_back(dstSizeBuf);
+
+    auto result = hashFunc(bi_input);
+    std::memcpy(out, result.data(), mdSize);
+
+    uint8_t mdXor[mdSize];
+    for (size_t i = 1; i < n; i++) {
+        for (size_t j = 0; j < mdSize; j++) {
+            mdXor[j] = md[j] ^ out[mdSize * (i - 1) + j];
+        }
+        
+        bi_input.clear();
+        bi_input.append(reinterpret_cast<const char*>(mdXor), mdSize);
+        bi_input.push_back(uint8_t(i + 1));
+        bi_input.append(reinterpret_cast<const char*>(dst), dstSize);
+        bi_input.push_back(dstSizeBuf);
+
+        result = hashFunc(bi_input);
+        std::memcpy(out + mdSize * i, result.data(), mdSize);
+    }
+}
 #if 0
 
 #ifndef MCL_USE_VINT

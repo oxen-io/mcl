@@ -10,6 +10,7 @@
 #include <mcl/fp.hpp>
 #include <mcl/ecparam.hpp>
 #include <mcl/window_method.hpp>
+#include <vector>
 
 #ifdef _MSC_VER
 	#pragma warning(push)
@@ -900,6 +901,7 @@ void addAffine(E& R, const E& P, const E& Q)
 	R.x = x3;
 }
 
+//TODO sean this is the map to place where thingo goes
 template<class E>
 void tryAndIncMapTo(E& P, const typename E::Fp& t)
 {
@@ -916,6 +918,83 @@ void tryAndIncMapTo(E& P, const typename E::Fp& t)
 		}
 		*x.getFp0() += F::BaseFp::one();
 	}
+}
+
+inline std::vector<uint8_t> hexStringToBytes(const std::string& hexStr) {
+    std::vector<uint8_t> bytes;
+    for (unsigned int i = 2; i < hexStr.length(); i += 2) {
+        std::string byteString = hexStr.substr(i, 2);
+        uint8_t byte = (uint8_t) strtol(byteString.c_str(), nullptr, 16);
+        bytes.push_back(byte);
+    }
+    return bytes;
+}
+
+inline std::string bytesToHexString(const std::vector<uint8_t>& bytes) {
+    std::string hexStr = "0x";
+    for (uint8_t byte : bytes) {
+        char buf[3];
+        snprintf(buf, sizeof(buf), "%02x", byte);
+        hexStr.append(buf);
+    }
+    return hexStr;
+}
+
+inline void incrementByteArray(std::vector<uint8_t>& bytes) {
+    for (int i = bytes.size() - 1; i >= 0; --i) {
+        if (++bytes[i] != 0) break;
+    }
+}
+
+using HashFunction = std::function<std::array<unsigned char,32>(const std::string&)>;
+template<class E, class F1>
+void tryAndIncMapToHash2(E& P, const std::string& message, HashFunction hashFunc)
+{
+	typedef typename E::Fp F;
+    std::vector<uint8_t> messageBytes = hexStringToBytes(message);
+    std::string newMessage = bytesToHexString(messageBytes);
+    auto hash = hashFunc(newMessage);
+    F1 t;
+    t.setArrayMask(hash.data(), hash.size());
+    F x = F(t,0);
+	for (;;) {
+		F y;
+		E::getWeierstrass(y, x);
+		if (F::squareRoot(y, y)) {
+			bool b;
+			P.set(&b, x, y, false);
+			assert(b);
+			return;
+		}
+		*x.getFp0() += F::BaseFp::one();
+	}
+}
+
+template<class E, class F1>
+void tryAndIncMapToHash(E& P, const std::string& message, HashFunction hashFunc) {
+    typedef typename E::Fp F;
+
+    std::vector<uint8_t> messageBytes = hexStringToBytes(message);
+    for (;;) {
+        std::string newMessage = bytesToHexString(messageBytes);
+        auto hash = hashFunc(newMessage);
+
+        F1 t;
+        t.setArrayMask(hash.data(), hash.size());
+        F x = F(t, 0);
+
+        F y;
+        E::getWeierstrass(y, x);
+        if (F::squareRoot(y, y)) {
+            bool b;
+            P.set(&b, x, y, false);
+            assert(b);
+            return;  // Successfully mapped to curve, exit the loop
+        }
+
+        // Increment the message bytes if no valid point is found
+        incrementByteArray(messageBytes);
+    }
 }
 
 inline size_t ilog2(size_t n)
