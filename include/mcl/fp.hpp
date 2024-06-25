@@ -60,6 +60,8 @@ uint32_t sha512(void *out, uint32_t maxOutSize, const void *msg, uint32_t msgSiz
 
 // draft-07 outSize = 128 or 256
 void expand_message_xmd(uint8_t out[], size_t outSize, const void *msg, size_t msgSize, const void *dst, size_t dstSize);
+using HashFunction = std::function<std::array<unsigned char,32>(const std::string&)>;
+void expand_message_xmd_hash(uint8_t out[], size_t outSize, const void *msg, size_t msgSize, const void *dst, size_t dstSize, HashFunction hashFunc);
 
 namespace local {
 
