@@ -145,6 +145,10 @@ target_compile_options(mcl_st PRIVATE ${MCL_COMPILE_OPTIONS})
 #	target_compile_features(mcl PUBLIC cxx_std_11)
 #	target_compile_features(mcl_st PUBLIC cxx_std_11)
 
+set(TARGET_PROCESSOR "${CMAKE_SYSTEM_PROCESSOR}")
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" AND CMAKE_SIZEOF_VOID_P EQUAL 4)
+    set(TARGET_PROCESSOR "x86")
+endif()
 
 # use bint-x64 on x64, bint${BIT}.ll on the other CPU
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64") # Win64
@@ -159,7 +163,7 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64") # Win64
 	add_dependencies(mcl gen_bint-x64-win.obj)
 	target_link_libraries(mcl_st PUBLIC ${BINT_X64_OBJ})
 	add_dependencies(mcl_st gen_bint-x64-win.obj)
-elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" AND NOT APPLE)
+elseif(TARGET_PROCESSOR STREQUAL "x86_64" AND NOT APPLE)
 	if (CMAKE_SYSTEM_NAME STREQUAL "MSYS")
 		target_sources(mcl PRIVATE src/asm/bint-x64-mingw.S)
 		target_sources(mcl_st PRIVATE src/asm/bint-x64-mingw.S)
@@ -190,7 +194,7 @@ endif()
 
 # use generated asm or compile base${BIT}.ll by clang
 
-if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" AND NOT APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "MSYS")
+if (TARGET_PROCESSOR STREQUAL "x86_64" AND NOT APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "MSYS")
   set(X86_64_LINUX TRUE)
 else()
   set(X86_64_LINUX FALSE)
@@ -236,7 +240,7 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64") # Win64
 #	add_dependencies(mcl_st msm_avx.o)
 #	target_sources(mcl_st PRIVATE ${MSM_OBJ})
 
-elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" AND NOT APPLE)
+elseif(TARGET_PROCESSOR STREQUAL "x86_64" AND NOT APPLE)
 	set(MSM_OBJ "${CMAKE_CURRENT_BINARY_DIR}/msm_avx.o")
 
 	add_custom_command(OUTPUT ${MSM_OBJ}
